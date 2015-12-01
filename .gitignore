@@ -1,3 +1,8 @@
+# Emacs temporary files
+*~
+*#
+.#*
+
 # Logs
 logs
 *.log
