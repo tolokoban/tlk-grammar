@@ -63,32 +63,36 @@ describe('Scanner', function() {
         });
     });
     describe('`fire` and `listen`', function() {
-        var RESULT = {};
-
-        var spc = $('spc').x0n($.char(' \t\n\r'));
+        var sep = $('sep').x0n($.char('+ \t\n\r'));
         var digit = $('digit').char('0','9').fire('digit');
-        var number = $('number').and($.x1n(digit), spc)
+        var number = $('number').and($.x1n(digit), sep)
             .init({n: 0})
             .listen({
                 digit: function(v) {
-console.log('Catch "digit" with value: ', v);                    
                     this.n = (v.charCodeAt(0) - 48) + this.n * 10;
-console.log(this);                    
                 }
             })
             .fire(function() {
-console.info("[scanner.spec] this.n=...", this.n);
                 return {id: 'number', val: this.n};
             });
-        var list = $('list').and(spc, $.x0n(number))
-            .listen({
-                number: function(v) {
-                    RESULT.value = v;
-                }
+        var accumulator = $('accumulator').and(sep, $.x0n(number))
+            .init({total: 0})
+            .listen({ number: function(v) { this.total += v; } });
+        [
+            ["7", 7],
+            ["3141592", 3141592],
+            ["4+9", 13],
+            ["44+19", 63],
+            ["945+2151 +   8712 + 4", 11812],
+            [" +  ++  +++ 945++++++++++2151 +  + 4 + 8712", 11812],
+            ["   945,2151 +;;,++   4 + 8712  ", 945],
+            ["44 + 19 , 85 + 112 + 12", 63],
+        ].forEach(function (item) {
+            var code = item[0];
+            var total = item[1];
+            it('should parse "' + code + '" and return ' + total, function() {
+                expect(accumulator.match(code)).toEqual({total: total});                
             });
-        it('should return 13', function() {
-            list.match('13');
-            expect(RESULT.value).toBe(13);
         });
     });
 });

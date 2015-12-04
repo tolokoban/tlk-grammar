@@ -64,18 +64,15 @@ Scanner.prototype.init = function(context) {
 /**
  * @return void
  */
-Scanner.prototype.match = function(lexer, parentEnv) {
+Scanner.prototype.match = function(lexer) {
     var matcher = this._matcher;
     if (typeof matcher !== 'function') return false;
 
     if (typeof lexer === 'string') {
         lexer = new Lexer(lexer);
     }
-    if (typeof parentEnv === 'undefined') parentEnv = {events: []};
-    if (typeof parentEnv.events === 'undefined') parentEnv.events = [];
-    else if (!Array.isArray(parentEnv.events)) parentEnv.events = [];
 
-    return this.internal_match(lexer, parentEnv);
+    return this.internal_match(lexer, {events: [], level: 0});
 };
 
 
@@ -86,7 +83,7 @@ Scanner.prototype.internal_match = function(lexer, parentEnv) {
     // Save the cursor position for potential rollback.
     var cursor = lexer.cursor;
     var ctx;
-    var env = { events: [] };
+    var env = { events: [], level: parentEnv.level + 1 };
     if (matcher(lexer, env)) {
         // Check for listeners on events.
         if (env.events.length > 0) {
@@ -123,7 +120,7 @@ Scanner.prototype.internal_match = function(lexer, parentEnv) {
             if (typeof event.val === 'undefined') event.val = env.val;
             parentEnv.events.push(event);
         }
-        return true;
+        return ctx || true;
     } else {
         // Rollback.
         lexer.cursor = cursor;
