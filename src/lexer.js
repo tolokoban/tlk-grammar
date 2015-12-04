@@ -15,18 +15,6 @@ Lexer.prototype.read = function() {
 /**
  * @return void
  */
-Lexer.prototype.char = function(chars) {
-    var c = this.read();
-    var found = chars.indexOf(c) > -1;
-    if (found) return true;
-    this.cursor--;
-    return false;
-};
-
-
-/**
- * @return void
- */
 Lexer.prototype.word = function(word) {
     var len = word.length;
     if (this.buffer.substr(this.cursor, len) == word) {
@@ -37,3 +25,13 @@ Lexer.prototype.word = function(word) {
 };
 
 
+/**
+ * @return void
+ */
+Lexer.prototype.eof = function() {
+    return this.cursor >= this.buffer.length;
+};
+
+
+
+module.exports = Lexer;

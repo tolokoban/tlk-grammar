@@ -1,31 +1,32 @@
 {
-  "name": "tlk-grammar",
-  "version": "0.0.1",
-  "description": "Simple, versatile and generic grammar scanner.",
-  "main": "index.js",
-  "scripts": {
-    "test": "jasmine"
-  },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/tolokoban/tlk-grammar.git"
-  },
-  "keywords": [
-    "grammar",
-    "scanner",
-    "lexer",
-    "syntax",
-    "compilation",
-    "tolokoban",
-    "parser"
-  ],
-  "author": "Tolokoban",
-  "license": "GPL-3.0",
-  "bugs": {
-    "url": "https://github.com/tolokoban/tlk-grammar/issues"
-  },
-  "homepage": "https://github.com/tolokoban/tlk-grammar#readme",
-  "devDependencies": {
-    "jasmine": "^2.3.2"
-  }
+    "name": "tlk-grammar",
+    "version": "0.0.1",
+    "description": "Simple, versatile and generic grammar scanner.",
+    "main": "index.js",
+    "scripts": {
+        "test": "jasmine",
+        "test:dbg": "node --debug-brk ./node_modules/jasmine/bin/jasmine.js"
+    },
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/tolokoban/tlk-grammar.git"
+    },
+    "keywords": [
+        "grammar",
+        "scanner",
+        "lexer",
+        "syntax",
+        "compilation",
+        "tolokoban",
+        "parser"
+    ],
+    "author": "Tolokoban",
+    "license": "GPL-3.0",
+    "bugs": {
+        "url": "https://github.com/tolokoban/tlk-grammar/issues"
+    },
+    "homepage": "https://github.com/tolokoban/tlk-grammar#readme",
+    "devDependencies": {
+        "jasmine": "^2.3.2"
+    }
 }
