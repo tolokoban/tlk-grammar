@@ -1,6 +1,6 @@
 # tlk-grammar
 Simple, versatile and generic grammar scanner.
-Not design to be the faster, but the more powerful and easy to use.
+Not design to be the fastest, but the most powerful and easy to use.
 
 ## Example
 
