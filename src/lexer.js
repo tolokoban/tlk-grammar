@@ -26,6 +26,18 @@ Lexer.prototype.word = function(word) {
 
 
 /**
+ * Try to mathc the regular expression `rx`.
+ */
+Lexer.prototype.regexp = function(rx) {
+    var match = rx.match(this.buffer.substr(this.cursor));
+    if (!match) return false;
+    this.cursor += match[0];
+    return true;
+};
+
+
+
+/**
  * @return void
  */
 Lexer.prototype.eof = function() {
