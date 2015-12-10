@@ -28,6 +28,13 @@ describe('Scanner', function() {
         describe('with "eof"', function() {
             check($.EOF, [''], ['k']);
         });
+        describe('with "until"', function() {
+            check(
+                $.and($.until('A', 'B', 'C'), $.char('ABC'), $.char('X')),
+                ['MisterAXisOK', 'MisterBXisNotAnorC', 'FinalCX'],
+                ['MisterAgisOK', 'MisterBgisNotAnorC', 'BadBBXnotFound']
+            );
+        });
         describe('with "char"', function() {
             // Syntax 1.
             check(

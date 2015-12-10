@@ -165,6 +165,54 @@ Scanner.prototype.char = function(chars, upperBound) {
 
 
 /**
+ * __char-not__ matcher.
+ * Match any char that `$.char(...)` would match with the same arguments.
+ */
+Scanner.prototype.charNot = function(chars, upperBound) {
+    this._type = "char-not";
+    if (typeof upperBound === 'undefined') {
+        // Syntax 1: char must be part of the string `chars`.
+        this._matcher = function(lexer, env) {
+            var c = lexer.read();
+            if (chars.indexOf(c) == -1) {
+                env.val = c;
+                return true;
+            }
+            return false;
+        };
+    } else {
+        // Syntax 2: char must be between (inclusive) `chars` and `upperBound`
+        this._matcher = function(lexer, env) {
+            var c = lexer.read();
+            if (c < chars || c > upperBound) {
+                env.val = c;
+                return true;
+            }
+            return false;
+        };
+    }
+    return this;
+};
+
+
+/**
+ * __char-any__ matcher.
+ * Matches any char.
+ *
+ * @return `false` only if end of buffer has been reached.
+ */
+Scanner.prototype.charAny = function() {
+    this._type = "char-any";
+    this._matcher = function(lexer, env) {
+        if (lexer.eof()) return false;
+        lexer.read();
+        return true;
+    };
+    return this;
+};
+
+
+/**
  * __word__ matcher.
  * Matches if the current word is `word`.
  */
@@ -180,6 +228,26 @@ Scanner.prototype.word = function(word) {
     return this;
 };
 
+
+/**
+ * @return void
+ */
+Scanner.prototype.until = function() {
+    this._type = "word";
+    // Duplicate `arguments` to be able to use the array in the matcher.
+    var args = [];
+    for (var i = 0 ; i < arguments.length ; i++) {
+        args.push(arguments[i]);        
+    }
+
+    this._matcher = function(lexer, env) {
+        var result = Lexer.prototype.until.apply(lexer, args);
+        if (result === false) return false;
+        env.value = result;
+        return true;
+    };
+    return this;
+};
 
 /**
  * __sequence__ matcher.
@@ -289,6 +357,30 @@ $.EOF = $('EOF').eof();
 
 $.char = function(a, b) { return (new Scanner()).char(a, b); };
 $.word = function(w) { return (new Scanner()).word(w); };
+$.until = function() { 
+    var scanner = new Scanner();
+    var args = [];
+    for (var i = 0 ; i < arguments.length ; i++) {
+        args.push(arguments[i]);        
+    }
+    return Scanner.prototype.until.apply(scanner, args);
+};
+$.and = function() { 
+    var scanner = new Scanner();
+    var args = [];
+    for (var i = 0 ; i < arguments.length ; i++) {
+        args.push(arguments[i]);        
+    }
+    return Scanner.prototype.and.apply(scanner, args);
+};
+$.or = function() { 
+    var scanner = new Scanner();
+    var args = [];
+    for (var i = 0 ; i < arguments.length ; i++) {
+        args.push(arguments[i]);        
+    }
+    return Scanner.prototype.or.apply(scanner, args);
+};
 $.x01 = function(s) { return (new Scanner()).x01(s); };
 $.x0n = function(s) { return (new Scanner()).x0n(s); };
 $.x1n = function(s) { return (new Scanner()).x1n(s); };
