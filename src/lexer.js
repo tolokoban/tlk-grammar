@@ -26,13 +26,17 @@ Lexer.prototype.word = function(word) {
 
 
 /**
- * Try to math the regular expression `rx`.
+ * Try to match the regular expression `rx`.
+ *
+ * @return `false` if no match. Otherwise, return the match array.
  */
 Lexer.prototype.regexp = function(rx) {
-    var match = rx.match(this.buffer.substr(this.cursor));
+    var text = this.buffer.substr(this.cursor);
+    var match = rx.exec(text);
     if (!match) return false;
-    this.cursor += match[0];
-    return true;
+    match[0] = text.substr(0, match.index) + match[0];
+    this.cursor += match[0].length;
+    return match;
 };
 
 
@@ -63,7 +67,7 @@ Lexer.prototype.until = function() {
             searchSpace = searchSpace.substr(0, wordIndex);
         }
     }
-    if (found) {
+    if (found && searchSpace.length > 0) {
         this.cursor += searchSpace.length;
         return searchSpace;
     }
@@ -73,10 +77,18 @@ Lexer.prototype.until = function() {
 
 
 /**
- * @return void
+ * End of file.
  */
 Lexer.prototype.eof = function() {
     return this.cursor >= this.buffer.length;
+};
+
+
+/**
+ * Beginning of file
+ */
+Lexer.prototype.bof = function() {
+    return this.cursor == 0;
 };
 
 

@@ -6,8 +6,52 @@ var Lexer = require("./lexer");
 var nameCounter = 0;
 
 
+/**
+ * Default  debug  listener.   Used  when  we  match   with  the  string
+ * `'console'` as arguemnt `debug` of the function `match(code, debug)`.
+ */
+function consoleDebug(type, env, result) {
+    var indent = '';
+    var i;
+    for (i = 0 ; i < env.level; i++) {
+        indent += ' | ';
+    }
+    var prefix = env.scanner._type;
+    var name = env.scanner.name();
+    name = prefix + (name && name != prefix ? ':' + name : '');
+    if (type == '>') {
+        console.log(indent + '<' + name + '> @' + env.cursor + " \t\t "
+                    + JSON.stringify(env.lexer.buffer.substr(env.cursor, 30)));
+
+    }
+    else if (type == '=') {
+        console.log(indent + ' > ' + JSON.stringify(result));
+        console.log(indent + '</' + name + '> @' + env.cursor);
+    }
+    else if (type == '!') {
+        console.log(indent + '</' + name + '> FALSE! \t\t '
+                    + JSON.stringify(env.lexer.buffer.substr(env.cursor, 30)));
+    }
+    else if (type == 'F') {
+        console.log(indent + ' > FIRE `' + result.id + '` : ' + JSON.stringify(result.val));
+    }
+}
+
+
+/**
+ * Usefull for stringifying `arguments`.
+ */
+function stringifyArray(arr) {
+    var args = [];
+    for (var i = 0 ; i < arr.length ; i++) {
+        args.push(arr[i]);
+    }
+    return JSON.stringify(args);
+}
+
+
 var Scanner = function(name) {
-    if (typeof name === 'undefined') name = '#' + (nameCounter++);
+    this._id = nameCounter++;
     this._name = name;
     this._ctx = function() { return {}; };
     this._listeners = {};
@@ -15,10 +59,17 @@ var Scanner = function(name) {
 
 
 /**
- * Get the name of this rule. This can be useful for debug.
+ * Get/set the name of this rule. This can be useful for debug.
  */
-Scanner.prototype.getName = function() {
-    return this._name;
+Scanner.prototype.name = function(v) {
+    if (typeof v === 'undefined') {
+        var name = this._name;
+        if (typeof name === 'undefined') name = '#' + this._id;
+        return name;
+    }
+    // Names cannot be overwritten.
+    if (!this._name) this._name = v;
+    return this;
 };
 
 
@@ -64,7 +115,7 @@ Scanner.prototype.init = function(context) {
 /**
  * @return void
  */
-Scanner.prototype.match = function(lexer) {
+Scanner.prototype.match = function(lexer, debug) {
     var matcher = this._matcher;
     if (typeof matcher !== 'function') return false;
 
@@ -72,19 +123,27 @@ Scanner.prototype.match = function(lexer) {
         lexer = new Lexer(lexer);
     }
 
-    return this.internal_match(lexer, {events: [], level: 0});
+    if (debug === 'console') debug = consoleDebug;
+    if (typeof debug !== 'function') debug = function() {};
+
+    return this.internal_match(lexer, {events: [], level: 0, cursor: 0}, debug);
 };
 
 
-Scanner.prototype.internal_match = function(lexer, parentEnv) {
+Scanner.prototype.internal_match = function(lexer, parentEnv, debug) {
     var matcher = this._matcher;
     if (typeof matcher !== 'function') return false;
 
+    parentEnv.cursor = lexer.cursor;
+    parentEnv.lexer = lexer;
+    parentEnv.scanner = this;
+    debug('>', parentEnv);
+
     // Save the cursor position for potential rollback.
     var cursor = lexer.cursor;
-    var ctx;
-    var env = { events: [], level: parentEnv.level + 1 };
-    if (matcher(lexer, env)) {
+    var ctx = this._ctx();
+    var env = { events: [], level: parentEnv.level + 1, ctx: ctx };
+    if (false !== matcher.call(ctx, lexer, env, debug)) {
         // Check for listeners on events.
         if (env.events.length > 0) {
             env.events.forEach(function (evt) {
@@ -92,10 +151,14 @@ Scanner.prototype.internal_match = function(lexer, parentEnv) {
                 var stopPropagation = false;
                 if (typeof listener === 'function') {
                     // Execute the listener.
-                    if (!ctx) ctx = this._ctx();
                     stopPropagation = (
                         true !== listener.call(ctx, evt.val)
                     );
+                }
+                else if (typeof listener !== 'undefined') {
+                    // A listener set to `null`  can be use to absord an
+                    // event without processing it.
+                    stopPropagation = true;
                 }
                 if (!stopPropagation) {
                     // Propagate events to parent.
@@ -105,11 +168,11 @@ Scanner.prototype.internal_match = function(lexer, parentEnv) {
         }
         // Check if there is something to fire.
         var fireVal = this._fireValue;
-        if (fireVal) {
-            if (!ctx) ctx = this._ctx();
+        if (typeof fireVal !== 'undefined') {
             // The  `fire` function  should return  an object  like this
             // `{id: 'number', val: 3.141592}`.
             var event = fireVal.call(ctx);
+            debug('F', parentEnv, event);
             // The `fire` function can return  a `string`. This is to be
             // considered as the `id` of the event.
             if (typeof event === 'string') {
@@ -118,11 +181,18 @@ Scanner.prototype.internal_match = function(lexer, parentEnv) {
             // Low-level scanners (such as  `char`, `word`, ...) store a
             // value in the environment (`env`).
             if (typeof event.val === 'undefined') event.val = env.val;
+            // If no value has been definde yet, just use the context.
+            if (typeof event.val === 'undefined') event.val = ctx.$value || ctx;
             parentEnv.events.push(event);
         }
-        return ctx || true;
+        // Return the context. If it does'nt exist, return the matcher's
+        // result.
+        var result = typeof ctx.$value === 'undefined' ? ctx : ctx.$value;
+        debug(result === false ? '!' : '=', parentEnv, result);
+        return result;
     } else {
         // Rollback.
+        debug('!', parentEnv);
         lexer.cursor = cursor;
         return false;
     }
@@ -139,23 +209,24 @@ Scanner.prototype.internal_match = function(lexer, parentEnv) {
  */
 Scanner.prototype.char = function(chars, upperBound) {
     this._type = "char";
+    this.name(JSON.stringify(chars) + (upperBound ? "-" + JSON.stringify(upperBound) : ''));
     if (typeof upperBound === 'undefined') {
         // Syntax 1: char must be part of the string `chars`.
-        this._matcher = function(lexer, env) {
+        this._matcher = function(lexer) {
             var c = lexer.read();
             if (chars.indexOf(c) > -1) {
-                env.val = c;
-                return true;
+                this.$value = c;
+                return c;
             }
             return false;
         };
     } else {
         // Syntax 2: char must be between (inclusive) `chars` and `upperBound`
-        this._matcher = function(lexer, env) {
+        this._matcher = function(lexer) {
             var c = lexer.read();
             if (c >= chars && c <= upperBound) {
-                env.val = c;
-                return true;
+                this.$value = c;
+                return c;
             }
             return false;
         };
@@ -170,23 +241,24 @@ Scanner.prototype.char = function(chars, upperBound) {
  */
 Scanner.prototype.charNot = function(chars, upperBound) {
     this._type = "char-not";
+    this.name(JSON.stringify(chars) + (upperBound ? "-" + JSON.stringify(upperBound) : ''));
     if (typeof upperBound === 'undefined') {
         // Syntax 1: char must be part of the string `chars`.
-        this._matcher = function(lexer, env) {
+        this._matcher = function(lexer) {
             var c = lexer.read();
             if (chars.indexOf(c) == -1) {
-                env.val = c;
-                return true;
+                this.$value = c;
+                return c;
             }
             return false;
         };
     } else {
         // Syntax 2: char must be between (inclusive) `chars` and `upperBound`
-        this._matcher = function(lexer, env) {
+        this._matcher = function(lexer) {
             var c = lexer.read();
             if (c < chars || c > upperBound) {
-                env.val = c;
-                return true;
+                this.$value = c;
+                return c;
             }
             return false;
         };
@@ -203,9 +275,9 @@ Scanner.prototype.charNot = function(chars, upperBound) {
  */
 Scanner.prototype.charAny = function() {
     this._type = "char-any";
-    this._matcher = function(lexer, env) {
+    this._matcher = function(lexer) {
         if (lexer.eof()) return false;
-        lexer.read();
+        this.$value = lexer.read();
         return true;
     };
     return this;
@@ -216,14 +288,40 @@ Scanner.prototype.charAny = function() {
  * __word__ matcher.
  * Matches if the current word is `word`.
  */
-Scanner.prototype.word = function(word) {
+Scanner.prototype.word = function() {
     this._type = "word";
-    this._matcher = function(lexer, env) {
-        if (lexer.word(word)) {
-            env.value = env;
-            return true;
+    var words = arguments;
+    this.name(stringifyArray(words));
+    this._matcher = function(lexer) {
+        var word;
+        for (var k = 0 ; k < words.length ; k++) {
+            word = words[k];
+            if (lexer.word(word)) {
+                return this.$value = word;
+            }
         }
         return false;
+    };
+    return this;
+};
+
+
+/**
+ * __regexp__ matcher.
+ * Matches against a regular expression.
+ *
+ * @return  `false`  if  no   match.  Otherwise,  returns  the  matching
+ * array. It will have only one items, unless you specified groups.
+ */
+Scanner.prototype.regexp = function(pattern, flags) {
+    this._type = "regexp";
+    if (pattern.charAt(0) != '^') {
+        pattern = '^' + pattern;
+    }
+    var rx = new RegExp(pattern, flags);
+    this.name("/" + pattern + "/" + (flags ? flags : ''));
+    this._matcher = function(lexer) {
+        return (this.$value = lexer.regexp(rx)) || false;
     };
     return this;
 };
@@ -233,21 +331,19 @@ Scanner.prototype.word = function(word) {
  * @return void
  */
 Scanner.prototype.until = function() {
-    this._type = "word";
+    this._type = "until";
     // Duplicate `arguments` to be able to use the array in the matcher.
-    var args = [];
-    for (var i = 0 ; i < arguments.length ; i++) {
-        args.push(arguments[i]);        
-    }
-
-    this._matcher = function(lexer, env) {
+    var args = arguments;
+    this.name(stringifyArray(args));
+    this._matcher = function(lexer) {
         var result = Lexer.prototype.until.apply(lexer, args);
         if (result === false) return false;
-        env.value = result;
+        this.$value = result;
         return true;
     };
     return this;
 };
+
 
 /**
  * __sequence__ matcher.
@@ -256,12 +352,11 @@ Scanner.prototype.until = function() {
 Scanner.prototype.and = function() {
     this._type = "and";
     var args = arguments;
-    this._matcher = function(lexer, env) {
-        // If the matching fails, we must go back to this cursor.
+    this._matcher = function(lexer, env, debug) {
         var child, i;
         for (i = 0 ; i < args.length ; i++) {
             child = args[i];
-            if (!child.internal_match(lexer, env)) {
+            if (false === child.internal_match(lexer, env, debug)) {
                 return false;
             }
         }
@@ -278,12 +373,11 @@ Scanner.prototype.and = function() {
 Scanner.prototype.or = function() {
     this._type = "or";
     var args = arguments;
-    this._matcher = function(lexer, env) {
-        // If the matching fails, we must go back to this cursor.
+    this._matcher = function(lexer, env, debug) {
         var child, i;
         for (i = 0 ; i < args.length ; i++) {
             child = args[i];
-            if (child.internal_match(lexer, env)) {
+            if (false !== child.internal_match(lexer, env, debug)) {
                 return true;
             }
         }
@@ -299,9 +393,9 @@ Scanner.prototype.or = function() {
  */
 Scanner.prototype.x1n = function(child) {
     this._type = 'x1n';
-    this._matcher = function(lexer, env) {
-        if (!child.internal_match(lexer, env)) return false;
-        while (child.internal_match(lexer, env));
+    this._matcher = function(lexer, env, debug) {
+        if (!child.internal_match(lexer, env, debug)) return false;
+        while (child.internal_match(lexer, env, debug));
         return true;
     };
     return this;
@@ -314,8 +408,8 @@ Scanner.prototype.x1n = function(child) {
  */
 Scanner.prototype.x0n = function(child) {
     this._type = 'x0n';
-    this._matcher = function(lexer, env) {
-        while (child.internal_match(lexer, env));
+    this._matcher = function(lexer, env, debug) {
+        while (child.internal_match(lexer, env, debug));
         return true;
     };
     return this;
@@ -328,8 +422,8 @@ Scanner.prototype.x0n = function(child) {
  */
 Scanner.prototype.x01 = function(child) {
     this._type = 'x01';
-    this._matcher = function(lexer, env) {
-        child.internal_match(lexer, env);
+    this._matcher = function(lexer, env, debug) {
+        child.internal_match(lexer, env, debug);
         return true;
     };
     return this;
@@ -341,8 +435,21 @@ Scanner.prototype.x01 = function(child) {
  */
 Scanner.prototype.eof = function() {
     this._type = 'eof';
-    this._matcher = function(lexer, env) {
-        return lexer.eof();
+    this._matcher = function(lexer) {
+        return this.$value = (lexer.eof() === false ? false : true);
+    };
+    return this;
+};
+
+
+/**
+ * __beginning of file__ matcher.
+ */
+Scanner.prototype.bof = function() {
+    this._type = 'bof';
+    this._matcher = function(lexer) {
+        this.$value = lexer.bof() !== false;
+        return this.$value;
     };
     return this;
 };
@@ -354,30 +461,43 @@ var $ = function(name) {
 
 // End of file.
 $.EOF = $('EOF').eof();
+// Beginning of file.
+$.BOF = $('BOF').bof();
 
+$.eof = function() { return (new Scanner()).eof(); };
+$.bof = function() { return (new Scanner()).bof(); };
+$.charAny = function() { return (new Scanner()).charAny(); };
+$.charNot = function(a, b) { return (new Scanner()).charNot(a, b); };
 $.char = function(a, b) { return (new Scanner()).char(a, b); };
-$.word = function(w) { return (new Scanner()).word(w); };
-$.until = function() { 
+$.word = function() {
+    /*
+    var i, args = [];
+    for (i = 0 ; i < arguments.length ; i++) args.push(arguments[i]);
+    */
+    return Scanner.prototype.word.apply(new Scanner(), arguments);
+};
+$.regexp = function(rxString, flags) { return (new Scanner()).regexp(rxString, flags); };
+$.until = function() {
     var scanner = new Scanner();
     var args = [];
     for (var i = 0 ; i < arguments.length ; i++) {
-        args.push(arguments[i]);        
+        args.push(arguments[i]);
     }
     return Scanner.prototype.until.apply(scanner, args);
 };
-$.and = function() { 
+$.and = function() {
     var scanner = new Scanner();
     var args = [];
     for (var i = 0 ; i < arguments.length ; i++) {
-        args.push(arguments[i]);        
+        args.push(arguments[i]);
     }
     return Scanner.prototype.and.apply(scanner, args);
 };
-$.or = function() { 
+$.or = function() {
     var scanner = new Scanner();
     var args = [];
     for (var i = 0 ; i < arguments.length ; i++) {
-        args.push(arguments[i]);        
+        args.push(arguments[i]);
     }
     return Scanner.prototype.or.apply(scanner, args);
 };
@@ -385,4 +505,9 @@ $.x01 = function(s) { return (new Scanner()).x01(s); };
 $.x0n = function(s) { return (new Scanner()).x0n(s); };
 $.x1n = function(s) { return (new Scanner()).x1n(s); };
 
+$.Scanner = Scanner;
+
+/**
+ *
+ */
 module.exports = $;
