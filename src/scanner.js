@@ -21,19 +21,20 @@ function consoleDebug(type, env, result) {
     name = prefix + (name && name != prefix ? ':' + name : '');
     if (type == '>') {
         console.log(indent + '<' + name + '> @' + env.cursor + " \t\t "
-                    + JSON.stringify(env.lexer.buffer.substr(env.cursor, 30)));
+                    + JSON.stringify(env.lexer.buffer.substr(env.cursor, 40)));
 
     }
     else if (type == '=') {
-        console.log(indent + ' > ' + JSON.stringify(result));
+        console.log(indent + ' > ' + JSON.stringify(result, null));
         console.log(indent + '</' + name + '> @' + env.cursor);
     }
     else if (type == '!') {
         console.log(indent + '</' + name + '> FALSE! \t\t '
-                    + JSON.stringify(env.lexer.buffer.substr(env.cursor, 30)));
+                    + JSON.stringify(env.lexer.buffer.substr(env.cursor, 40)));
     }
     else if (type == 'F') {
-        console.log(indent + ' > FIRE `' + result.id + '` : ' + JSON.stringify(result.val));
+        console.log(indent + ' > FIRE `' + result.id + '` : '
+                    + JSON.stringify(result.val, null));
     }
 }
 
@@ -81,7 +82,12 @@ Scanner.prototype.fire = function(id, value) {
     if (typeof id === 'function') {
         this._fireValue = id;
     } else {
-        this._fireValue = function() { return {id: id, val: value}; };
+        if( typeof value === 'undefined' ) {
+            // Return the context's value.
+            this._fireValue = function() { return {id: id, val: this.$value[0]}; };
+        } else {
+            this._fireValue = function() { return {id: id, val: value}; };
+        }
     }
     return this;
 };
@@ -104,9 +110,9 @@ Scanner.prototype.listen = function(listeners) {
 Scanner.prototype.init = function(context) {
     if (typeof context === 'function') {
         this._ctx = context;
-    } else {
-        var stringified = JSON.stringify(context);
-        this._ctx = function() { return JSON.parse(stringified); };
+    } else {        
+        var copy = JSON.stringify(context);
+        this._ctx = function() { return JSON.parse( copy ); };
     }
     return this;
 };
@@ -181,7 +187,7 @@ Scanner.prototype.internal_match = function(lexer, parentEnv, debug) {
             // Low-level scanners (such as  `char`, `word`, ...) store a
             // value in the environment (`env`).
             if (typeof event.val === 'undefined') event.val = env.val;
-            // If no value has been definde yet, just use the context.
+            // If no value has been defined yet, just use the context.
             if (typeof event.val === 'undefined') event.val = ctx.$value || ctx;
             parentEnv.events.push(event);
         }
@@ -471,9 +477,9 @@ $.charNot = function(a, b) { return (new Scanner()).charNot(a, b); };
 $.char = function(a, b) { return (new Scanner()).char(a, b); };
 $.word = function() {
     /*
-    var i, args = [];
-    for (i = 0 ; i < arguments.length ; i++) args.push(arguments[i]);
-    */
+     var i, args = [];
+     for (i = 0 ; i < arguments.length ; i++) args.push(arguments[i]);
+     */
     return Scanner.prototype.word.apply(new Scanner(), arguments);
 };
 $.regexp = function(rxString, flags) { return (new Scanner()).regexp(rxString, flags); };
